@@ -1,0 +1,47 @@
+name: Teams daily digest
+
+# 자동 실행 없이, Actions 화면의 Run workflow 버튼을 누를 때만 실행
+on:
+  workflow_dispatch:
+
+# 버튼을 연달아 눌러도 한 번에 하나씩만 실행 (중복 요약 방지)
+concurrency:
+  group: teams-digest
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install requests
+
+      # Copilot CLI (COPILOT_GITHUB_TOKEN 시크릿이 있을 때만 사용됨)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
+      - name: Build digest
+        env:
+          DIGEST_URL: ${{ secrets.DIGEST_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          # GitHub Copilot 무료 요금제로 요약 (선택)
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          # 다른 AI 서비스 키가 있을 때 (선택)
+          AI_BASE_URL: ${{ secrets.AI_BASE_URL }}
+          AI_MODEL: ${{ secrets.AI_MODEL }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+        run: python scripts/digest.py
