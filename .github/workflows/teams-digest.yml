@@ -1,13 +1,17 @@
 name: Teams daily digest
 
+# 자동 실행 없이, Actions 화면의 Run workflow 버튼을 누를 때만 실행
 on:
-  schedule:
-    # 09:30 UTC = 18:30 KST, 매일 (Power Automate 18:00 실행이 끝난 뒤)
-    - cron: "30 9 * * *"
   workflow_dispatch:
+
+# 버튼을 연달아 눌러도 한 번에 하나씩만 실행 (중복 요약 방지)
+concurrency:
+  group: teams-digest
+  cancel-in-progress: false
 
 permissions:
   issues: write
+  models: read
 
 jobs:
   digest:
@@ -25,7 +29,6 @@ jobs:
       - name: Build digest
         env:
           DIGEST_URL: ${{ secrets.DIGEST_URL }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: python scripts/digest.py
