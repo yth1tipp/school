@@ -28,7 +28,7 @@ COPILOT_TOKEN = os.environ.get("COPILOT_GITHUB_TOKEN", "")
 USE_COPILOT = bool(COPILOT_TOKEN)          # GitHub Copilot(무료 요금제 포함) 우선
 AI_ENABLED = USE_COPILOT or bool(AI_BASE_URL and AI_MODEL and AI_API_KEY)
 KST = timezone(timedelta(hours=9))
-FALLBACK_HOURS = 6            # 이전 이슈가 없을 때만 쓰는 기본 범위
+ISSUE_LIMIT = 60000           # GitHub 이슈 본문 최대 65,536자에서 여유를 둔 값
 CHUNK_CHARS = 30000 if os.environ.get("COPILOT_GITHUB_TOKEN") else 7000
 MIN_CHUNK_CHARS = 1500
 MARKER = re.compile(r"<!-- last-message: (\S+) -->")
@@ -384,8 +384,8 @@ def main():
 
         since = last_processed(token, repo)
         if since is None:
-            since = now - timedelta(hours=FALLBACK_HOURS)
-            print(f"이전 정리가 없어 최근 {FALLBACK_HOURS}시간을 대상으로 합니다.")
+            since = datetime(2000, 1, 1, tzinfo=KST)
+            print("이전 정리가 없어 파일에 있는 메시지 전체를 대상으로 합니다.")
         else:
             print(f"지난 정리 이후({since:%m-%d %H:%M}) 메시지를 찾습니다.")
 
@@ -399,7 +399,8 @@ def main():
             return
 
         sections = build_sections(new)
-        label = f"{since:%m-%d %H:%M}부터 {now:%m-%d %H:%M}까지"
+        first = min(m["sent"] for m in new)
+        label = f"{first:%m-%d %H:%M}부터 {now:%m-%d %H:%M}까지"
         ai_note = ""
         if AI_ENABLED:
             try:
@@ -420,6 +421,10 @@ def main():
                 + (f"<details><summary>원문 보기</summary>\n\n{source}\n\n</details>\n\n"
                    if "## 과목별 원문" not in summary else "")
                 + f"<!-- last-message: {latest.isoformat()} -->")
+        if len(body) > ISSUE_LIMIT:
+            marker = f"<!-- last-message: {latest.isoformat()} -->"
+            cut_note = "\n\n…(분량이 많아 이하 생략. 전체 원문은 OneDrive의 digest.txt 참고)\n\n"
+            body = body[: ISSUE_LIMIT - len(marker) - len(cut_note)] + cut_note + marker
         url = create_issue(token, repo, f"[Teams] {now:%m-%d %H:%M} 정리", body)
         status = f"{now:%m-%d %H:%M} · 새 메시지 {len(new)}건 · [결과 보기]({url})"
         print(f"이슈를 만들었습니다: {url}")
@@ -433,3 +438,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
